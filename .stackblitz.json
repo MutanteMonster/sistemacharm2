@@ -1,0 +1,12 @@
+{
+  "title": "Charm Festas - Controle de Estoque",
+  "description": "App estático (Vanilla JS) preparado para StackBlitz.",
+  "template": "javascript",
+  "dependencies": {},
+  "settings": {
+    "compile": {
+      "clearConsole": false
+    }
+  },
+  "startCommand": "echo 'Open index.html'"
+}
