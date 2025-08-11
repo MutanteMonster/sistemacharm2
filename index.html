@@ -1,0 +1,3436 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Controle de Estoque - Charm Festas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .sidebar-transition {
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        .modal-overlay {
+            backdrop-filter: blur(4px);
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-em-estoque {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .status-baixo-estoque {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-sem-estoque {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .status-pendente {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-confirmado {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-entregue {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .status-cancelado {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+
+        .connection-online {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+
+        .connection-offline {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+
+        .connection-loading {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+
+        .setup-instructions {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px;
+            text-align: center;
+        }
+
+
+        .sql-code {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 15px 0;
+            text-align: left;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-status connection-loading">
+        <div class="loading-spinner"></div>
+        Conectando ao Supabase...
+    </div>
+
+
+    <!-- Setup Instructions Modal -->
+    <div id="setup-modal" class="fixed inset-0 bg-black bg-opacity-50 modal-overlay z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="setup-instructions">
+                    <h2 class="text-2xl font-bold mb-4">🚀 Configuração do Banco de Dados</h2>
+                    <p class="text-lg mb-4">Para usar o sistema, você precisa criar as tabelas no Supabase</p>
+                </div>
+                
+                <div class="p-6">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-3">📋 Instruções:</h3>
+                        <ol class="list-decimal list-inside space-y-2 text-left">
+                            <li>Acesse seu projeto no <a href="https://supabase.com/dashboard" target="_blank" class="text-blue-600 underline">Supabase Dashboard</a></li>
+                            <li>Vá na seção <strong>"SQL Editor"</strong> (no menu lateral)</li>
+                            <li>Copie e cole o código SQL abaixo</li>
+                            <li>Clique em <strong>"Run"</strong> para executar</li>
+                            <li>Feche este modal e o sistema estará pronto!</li>
+                        </ol>
+                    </div>
+
+
+                    <div class="mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-semibold">Código SQL para criar as tabelas:</h4>
+                            <button onclick="copySQL()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                                📋 Copiar SQL
+                            </button>
+                        </div>
+                        <div id="sql-code" class="sql-code">-- Execute este SQL no Supabase SQL Editor:
+
+
+-- Tabela de produtos
+CREATE TABLE IF NOT EXISTS produtos (
+    id BIGSERIAL PRIMARY KEY,
+    code TEXT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    min_stock INTEGER NOT NULL DEFAULT 0,
+    box_quantity INTEGER,
+    street TEXT,
+    row TEXT,
+    area TEXT,
+    unit_price DECIMAL(10,2) DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Tabela de clientes
+CREATE TABLE IF NOT EXISTS clientes (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    fantasy_name TEXT,
+    phone TEXT NOT NULL,
+    email TEXT,
+    document TEXT,
+    address TEXT,
+    neighborhood TEXT,
+    zipcode TEXT,
+    city TEXT,
+    state TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Tabela de pedidos
+CREATE TABLE IF NOT EXISTS pedidos (
+    id BIGSERIAL PRIMARY KEY,
+    customer_name TEXT NOT NULL,
+    fantasy_name TEXT,
+    cnpj TEXT,
+    customer_phone TEXT NOT NULL,
+    customer_email TEXT,
+    address TEXT,
+    neighborhood TEXT,
+    zipcode TEXT,
+    city TEXT,
+    state TEXT,
+    carrier_cnpj TEXT,
+    carrier_name TEXT,
+    carrier_phone TEXT,
+    carrier_address TEXT,
+    carrier_neighborhood TEXT,
+    carrier_zipcode TEXT,
+    carrier_city TEXT,
+    carrier_state TEXT,
+    order_type TEXT DEFAULT 'caixa-fechada',
+    discount_percent DECIMAL(5,2) DEFAULT 0,
+    items JSONB NOT NULL,
+    notes TEXT,
+    status TEXT DEFAULT 'pendente',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Tabela de movimentações
+CREATE TABLE IF NOT EXISTS movimentacoes (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT REFERENCES produtos(id),
+    type TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Habilitar RLS (Row Level Security)
+ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE movimentacoes ENABLE ROW LEVEL SECURITY;
+
+
+-- Remover políticas existentes se houver
+DROP POLICY IF EXISTS "Allow all operations" ON produtos;
+DROP POLICY IF EXISTS "Allow all operations" ON clientes;
+DROP POLICY IF EXISTS "Allow all operations" ON pedidos;
+DROP POLICY IF EXISTS "Allow all operations" ON movimentacoes;
+
+
+-- Criar políticas para permitir acesso público
+CREATE POLICY "Allow all operations" ON produtos FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON clientes FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON pedidos FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON movimentacoes FOR ALL USING (true);
+
+
+-- Inserir alguns produtos de exemplo
+INSERT INTO produtos (code, name, category, quantity, min_stock, box_quantity, street, row, area, unit_price, description) VALUES
+('HAL001', 'Máscara de Bruxa', 'halloween', 15, 5, 12, 'A', '1', 'Depósito', 8.50, 'Máscara de bruxa para Halloween'),
+('TIA001', 'Tiara Princesa Dourada', 'tiaras', 8, 3, 6, 'B', '2', 'Prateleira', 12.00, 'Tiara dourada estilo princesa'),
+('CHA001', 'Chapéu de Palhaço', 'chapeu', 20, 5, 10, 'A', '3', 'Depósito', 6.75, 'Chapéu colorido de palhaço'),
+('LED001', 'Pisca LED Colorido', 'led', 25, 8, 20, 'C', '1', 'Eletrônicos', 15.90, 'Pisca pisca LED multicolor'),
+('MAS001', 'Máscara Veneziana', 'mascaras', 12, 4, 8, 'B', '1', 'Prateleira', 18.50, 'Máscara veneziana elegante')
+ON CONFLICT DO NOTHING;
+
+
+-- Inserir clientes fictícios (usando INSERT com verificação)
+DO $$
+BEGIN
+    -- Verificar se já existem clientes, se não, inserir os exemplos
+    IF NOT EXISTS (SELECT 1 FROM clientes LIMIT 1) THEN
+        INSERT INTO clientes (name, fantasy_name, phone, email, document, address, neighborhood, zipcode, city, state, notes) VALUES
+        ('Maria Silva Santos', 'Festas da Maria', '(11) 98765-4321', 'maria@festas.com', '12.345.678/0001-90', 'Rua das Flores, 123', 'Centro', '01234-567', 'São Paulo', 'SP', 'Cliente VIP - Pedidos grandes'),
+        ('João Carlos Oliveira', NULL, '(11) 99876-5432', 'joao.oliveira@email.com', '123.456.789-01', 'Av. Paulista, 456', 'Bela Vista', '01310-100', 'São Paulo', 'SP', 'Cliente desde 2020'),
+        ('Buffet Alegria Ltda', 'Buffet Alegria', '(11) 97654-3210', 'contato@buffetalegria.com.br', '98.765.432/0001-10', 'Rua dos Eventos, 789', 'Vila Madalena', '05435-020', 'São Paulo', 'SP', 'Especializado em festas infantis'),
+        ('Ana Paula Costa', 'Decorações Ana', '(11) 96543-2109', 'ana@decoracoes.com', '11.222.333/0001-44', 'Rua das Palmeiras, 321', 'Jardins', '01234-000', 'São Paulo', 'SP', 'Foco em decoração de casamentos'),
+        ('Carlos Eduardo Lima', NULL, '(11) 95432-1098', 'carlos.lima@gmail.com', '987.654.321-00', 'Rua da Paz, 654', 'Mooca', '03124-010', 'São Paulo', 'SP', 'Compra para revenda'),
+        ('Festa Total Eventos', 'Festa Total', '(11) 94321-0987', 'vendas@festatotal.com.br', '55.666.777/0001-88', 'Av. dos Eventos, 987', 'Itaim Bibi', '04567-890', 'São Paulo', 'SP', 'Grande cliente corporativo'),
+        ('Luciana Ferreira', 'Lu Festas', '(11) 93210-9876', 'lu@festas.net', '22.333.444/0001-55', 'Rua das Rosas, 147', 'Pinheiros', '05422-030', 'São Paulo', 'SP', 'Especialista em festas temáticas'),
+        ('Roberto Santos', NULL, '(11) 92109-8765', 'roberto.santos@hotmail.com', '456.789.123-45', 'Rua do Comércio, 258', 'Liberdade', '01503-020', 'São Paulo', 'SP', 'Cliente eventual'),
+        ('Mega Festas & Cia', 'Mega Festas', '(11) 91098-7654', 'pedidos@megafestas.com', '77.888.999/0001-22', 'Av. das Nações, 369', 'Vila Olímpia', '04578-000', 'São Paulo', 'SP', 'Rede de lojas de festas'),
+        ('Patricia Almeida', 'Paty Eventos', '(11) 90987-6543', 'paty@eventos.com.br', '33.444.555/0001-66', 'Rua dos Sonhos, 741', 'Brooklin', '04567-123', 'São Paulo', 'SP', 'Organiza eventos corporativos'),
+        ('Fernando Costa', NULL, '(19) 98765-4321', 'fernando@email.com', '789.123.456-78', 'Rua Campinas, 852', 'Centro', '13010-111', 'Campinas', 'SP', 'Cliente do interior'),
+        ('Buffet Encanto', 'Encanto Festas', '(21) 97654-3210', 'contato@encanto.com.br', '44.555.666/0001-99', 'Rua Copacabana, 963', 'Copacabana', '22070-010', 'Rio de Janeiro', 'RJ', 'Cliente do Rio de Janeiro');
+        
+        RAISE NOTICE 'Clientes fictícios inseridos com sucesso!';
+    ELSE
+        RAISE NOTICE 'Clientes já existem na base de dados.';
+    END IF;
+END $$;
+
+
+-- Tabela de produtos
+CREATE TABLE IF NOT EXISTS produtos (
+    id BIGSERIAL PRIMARY KEY,
+    code TEXT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    min_stock INTEGER NOT NULL DEFAULT 0,
+    box_quantity INTEGER,
+    street TEXT,
+    row TEXT,
+    area TEXT,
+    unit_price DECIMAL(10,2) DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Tabela de clientes
+CREATE TABLE IF NOT EXISTS clientes (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    fantasy_name TEXT,
+    phone TEXT NOT NULL,
+    email TEXT,
+    document TEXT,
+    address TEXT,
+    neighborhood TEXT,
+    zipcode TEXT,
+    city TEXT,
+    state TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Tabela de pedidos
+CREATE TABLE IF NOT EXISTS pedidos (
+    id BIGSERIAL PRIMARY KEY,
+    customer_name TEXT NOT NULL,
+    fantasy_name TEXT,
+    cnpj TEXT,
+    customer_phone TEXT NOT NULL,
+    customer_email TEXT,
+    address TEXT,
+    neighborhood TEXT,
+    zipcode TEXT,
+    city TEXT,
+    state TEXT,
+    carrier_cnpj TEXT,
+    carrier_name TEXT,
+    carrier_phone TEXT,
+    carrier_address TEXT,
+    carrier_neighborhood TEXT,
+    carrier_zipcode TEXT,
+    carrier_city TEXT,
+    carrier_state TEXT,
+    order_type TEXT DEFAULT 'caixa-fechada',
+    discount_percent DECIMAL(5,2) DEFAULT 0,
+    items JSONB NOT NULL,
+    notes TEXT,
+    status TEXT DEFAULT 'pendente',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Tabela de movimentações
+CREATE TABLE IF NOT EXISTS movimentacoes (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT REFERENCES produtos(id),
+    type TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Habilitar RLS (Row Level Security)
+ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE movimentacoes ENABLE ROW LEVEL SECURITY;
+
+
+-- Remover políticas existentes se houver
+DROP POLICY IF EXISTS "Allow all operations" ON produtos;
+DROP POLICY IF EXISTS "Allow all operations" ON clientes;
+DROP POLICY IF EXISTS "Allow all operations" ON pedidos;
+DROP POLICY IF EXISTS "Allow all operations" ON movimentacoes;
+
+
+-- Criar políticas para permitir acesso público
+CREATE POLICY "Allow all operations" ON produtos FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON clientes FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON pedidos FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON movimentacoes FOR ALL USING (true);
+
+
+-- Inserir alguns produtos de exemplo
+INSERT INTO produtos (code, name, category, quantity, min_stock, box_quantity, street, row, area, unit_price, description) VALUES
+('HAL001', 'Máscara de Bruxa', 'halloween', 15, 5, 12, 'A', '1', 'Depósito', 8.50, 'Máscara de bruxa para Halloween'),
+('TIA001', 'Tiara Princesa Dourada', 'tiaras', 8, 3, 6, 'B', '2', 'Prateleira', 12.00, 'Tiara dourada estilo princesa'),
+('CHA001', 'Chapéu de Palhaço', 'chapeu', 20, 5, 10, 'A', '3', 'Depósito', 6.75, 'Chapéu colorido de palhaço'),
+('LED001', 'Pisca LED Colorido', 'led', 25, 8, 20, 'C', '1', 'Eletrônicos', 15.90, 'Pisca pisca LED multicolor'),
+('MAS001', 'Máscara Veneziana', 'mascaras', 12, 4, 8, 'B', '1', 'Prateleira', 18.50, 'Máscara veneziana elegante')
+ON CONFLICT DO NOTHING;
+
+
+-- Inserir clientes fictícios (usando INSERT com verificação)
+DO $$
+BEGIN
+    -- Verificar se já existem clientes, se não, inserir os exemplos
+    IF NOT EXISTS (SELECT 1 FROM clientes LIMIT 1) THEN
+        INSERT INTO clientes (name, fantasy_name, phone, email, document, address, neighborhood, zipcode, city, state, notes) VALUES
+        ('Maria Silva Santos', 'Festas da Maria', '(11) 98765-4321', 'maria@festas.com', '12.345.678/0001-90', 'Rua das Flores, 123', 'Centro', '01234-567', 'São Paulo', 'SP', 'Cliente VIP - Pedidos grandes'),
+        ('João Carlos Oliveira', NULL, '(11) 99876-5432', 'joao.oliveira@email.com', '123.456.789-01', 'Av. Paulista, 456', 'Bela Vista', '01310-100', 'São Paulo', 'SP', 'Cliente desde 2020'),
+        ('Buffet Alegria Ltda', 'Buffet Alegria', '(11) 97654-3210', 'contato@buffetalegria.com.br', '98.765.432/0001-10', 'Rua dos Eventos, 789', 'Vila Madalena', '05435-020', 'São Paulo', 'SP', 'Especializado em festas infantis'),
+        ('Ana Paula Costa', 'Decorações Ana', '(11) 96543-2109', 'ana@decoracoes.com', '11.222.333/0001-44', 'Rua das Palmeiras, 321', 'Jardins', '01234-000', 'São Paulo', 'SP', 'Foco em decoração de casamentos'),
+        ('Carlos Eduardo Lima', NULL, '(11) 95432-1098', 'carlos.lima@gmail.com', '987.654.321-00', 'Rua da Paz, 654', 'Mooca', '03124-010', 'São Paulo', 'SP', 'Compra para revenda'),
+        ('Festa Total Eventos', 'Festa Total', '(11) 94321-0987', 'vendas@festatotal.com.br', '55.666.777/0001-88', 'Av. dos Eventos, 987', 'Itaim Bibi', '04567-890', 'São Paulo', 'SP', 'Grande cliente corporativo'),
+        ('Luciana Ferreira', 'Lu Festas', '(11) 93210-9876', 'lu@festas.net', '22.333.444/0001-55', 'Rua das Rosas, 147', 'Pinheiros', '05422-030', 'São Paulo', 'SP', 'Especialista em festas temáticas'),
+        ('Roberto Santos', NULL, '(11) 92109-8765', 'roberto.santos@hotmail.com', '456.789.123-45', 'Rua do Comércio, 258', 'Liberdade', '01503-020', 'São Paulo', 'SP', 'Cliente eventual'),
+        ('Mega Festas & Cia', 'Mega Festas', '(11) 91098-7654', 'pedidos@megafestas.com', '77.888.999/0001-22', 'Av. das Nações, 369', 'Vila Olímpia', '04578-000', 'São Paulo', 'SP', 'Rede de lojas de festas'),
+        ('Patricia Almeida', 'Paty Eventos', '(11) 90987-6543', 'paty@eventos.com.br', '33.444.555/0001-66', 'Rua dos Sonhos, 741', 'Brooklin', '04567-123', 'São Paulo', 'SP', 'Organiza eventos corporativos'),
+        ('Fernando Costa', NULL, '(19) 98765-4321', 'fernando@email.com', '789.123.456-78', 'Rua Campinas, 852', 'Centro', '13010-111', 'Campinas', 'SP', 'Cliente do interior'),
+        ('Buffet Encanto', 'Encanto Festas', '(21) 97654-3210', 'contato@encanto.com.br', '44.555.666/0001-99', 'Rua Copacabana, 963', 'Copacabana', '22070-010', 'Rio de Janeiro', 'RJ', 'Cliente do Rio de Janeiro');
+        
+        RAISE NOTICE 'Clientes fictícios inseridos com sucesso!';
+    ELSE
+        RAISE NOTICE 'Clientes já existem na base de dados.';
+    END IF;
+END $$;</div>
+                    </div>
+
+
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-yellow-800">Importante</h3>
+                                <div class="mt-2 text-sm text-yellow-700">
+                                    <p>Execute este SQL apenas uma vez. Se você já executou antes, pode fechar este modal e usar o sistema normalmente.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row gap-3 justify-between">
+                    <button onclick="openSupabaseDashboard()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center">
+                        🚀 Abrir Supabase Dashboard
+                    </button>
+                    <button onclick="closeSetupModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center">
+                        ✅ Já executei o SQL
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <button id="menu-toggle" class="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <h1 class="ml-4 text-2xl font-bold gradient-bg bg-clip-text text-transparent">Charm Festas</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button onclick="showSetupModal()" class="p-2 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100" title="Configuração do Banco">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </button>
+                    <button id="notifications-btn" class="p-2 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM10.07 2.82l3.12 3.12M7.05 5.84l3.12 3.12M4.03 8.86l3.12 3.12" />
+                        </svg>
+                        <span id="notification-badge" class="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hidden">0</span>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm text-gray-700">Admin</span>
+                        <div class="h-8 w-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium">A</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+
+    <div class="flex h-screen pt-16">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-64 bg-white shadow-sm border-r border-gray-200 sidebar-transition lg:translate-x-0 -translate-x-full fixed lg:static z-30 h-full">
+            <nav class="mt-8 px-4">
+                <ul class="space-y-2">
+                    <li>
+                        <button onclick="showSection('dashboard')" class="nav-item w-full flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 active">
+                            <svg class="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                            </svg>
+                            Dashboard
+                        </button>
+                    </li>
+                    <li>
+                        <button onclick="showSection('produtos')" class="nav-item w-full flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100">
+                            <svg class="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            Produtos
+                        </button>
+                    </li>
+                    <li>
+                        <button onclick="showSection('pedidos')" class="nav-item w-full flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100">
+                            <svg class="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                            </svg>
+                            Pedidos
+                        </button>
+                    </li>
+                    <li>
+                        <button onclick="showSection('clientes')" class="nav-item w-full flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100">
+                            <svg class="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Clientes
+                        </button>
+                    </li>
+                    <li>
+                        <button onclick="showSection('historico')" class="nav-item w-full flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100">
+                            <svg class="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Histórico
+                        </button>
+                    </li>
+                    <li>
+                        <button onclick="showSection('relatorios')" class="nav-item w-full flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100">
+                            <svg class="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            Relatórios
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+
+        <!-- Overlay para mobile -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden hidden"></div>
+
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="p-6">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-900">Dashboard</h2>
+                    <p class="text-gray-600">Visão geral do seu estoque</p>
+                </div>
+
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 rounded-lg">
+                                <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Total de Produtos</p>
+                                <p id="total-produtos" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 rounded-lg">
+                                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Em Estoque</p>
+                                <p id="produtos-estoque" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-yellow-100 rounded-lg">
+                                <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Baixo Estoque</p>
+                                <p id="produtos-baixo-estoque" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-red-100 rounded-lg">
+                                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Sem Estoque</p>
+                                <p id="produtos-sem-estoque" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Recent Activity -->
+                <div class="bg-white rounded-lg shadow-sm">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">Atividades Recentes</h3>
+                    </div>
+                    <div class="p-6">
+                        <div id="recent-activities" class="space-y-4">
+                            <p class="text-gray-500 text-center py-8">Carregando atividades...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Produtos Section -->
+            <section id="produtos-section" class="p-6 hidden">
+                <div class="mb-8">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-3xl font-bold text-gray-900">Produtos</h2>
+                            <p class="text-gray-600">Gerencie seu inventário</p>
+                        </div>
+                        <button onclick="openProductModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Novo Produto
+                        </button>
+                    </div>
+                </div>
+
+
+                <!-- Search and Filters -->
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="search-produtos" placeholder="Buscar produtos..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <select id="filter-categoria" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Todas as categorias</option>
+                            <option value="halloween">Halloween</option>
+                            <option value="mascaras">Máscaras</option>
+                            <option value="tiaras">Tiaras</option>
+                            <option value="chapeu">Chapéu</option>
+                            <option value="luvas">Luvas</option>
+                            <option value="aderecoes">Adereços</option>
+                            <option value="saias">Saias</option>
+                            <option value="acessorios-balao">Acessórios para balão</option>
+                            <option value="led">LED</option>
+                            <option value="lanca-confete">Lança Confete</option>
+                            <option value="animais">Animais</option>
+                            <option value="cortinas-metalizadas">Cortinas Metalizadas</option>
+                            <option value="utilidades">Utilidades</option>
+                            <option value="envelopes">Envelopes</option>
+                            <option value="lc">LC</option>
+                        </select>
+                        <select id="filter-status" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Todos os status</option>
+                            <option value="em-estoque">Em Estoque</option>
+                            <option value="baixo-estoque">Baixo Estoque</option>
+                            <option value="sem-estoque">Sem Estoque</option>
+                        </select>
+                    </div>
+                </div>
+
+
+                <!-- Products Table -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="produtos-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Carregando produtos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Pedidos Section -->
+            <section id="pedidos-section" class="p-6 hidden">
+                <div class="mb-8">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-3xl font-bold text-gray-900">Pedidos</h2>
+                            <p class="text-gray-600">Gerencie seus pedidos</p>
+                        </div>
+                        <button onclick="openOrderModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Novo Pedido
+                        </button>
+                    </div>
+                </div>
+
+
+                <!-- Search and Filters -->
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="search-pedidos" placeholder="Buscar pedidos..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <select id="filter-status-pedido" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Todos os status</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="confirmado">Confirmado</option>
+                            <option value="entregue">Entregue</option>
+                            <option value="cancelado">Cancelado</option>
+                        </select>
+                        <select id="filter-tipo-pedido" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Todos os tipos</option>
+                            <option value="caixa-fechada">Caixa Fechada</option>
+                            <option value="caixa-fracionada">Caixa Fracionada</option>
+                        </select>
+                    </div>
+                </div>
+
+
+                <!-- Orders Table -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pedido</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pedidos-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Carregando pedidos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Clientes Section -->
+            <section id="clientes-section" class="p-6 hidden">
+                <div class="mb-8">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-3xl font-bold text-gray-900">Clientes</h2>
+                            <p class="text-gray-600">Gerencie seus clientes</p>
+                        </div>
+                        <button onclick="openClientModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Novo Cliente
+                        </button>
+                    </div>
+                </div>
+
+
+                <!-- Search -->
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="search-clientes" placeholder="Buscar clientes..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Clients Table -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contato</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Localização</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cadastro</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientes-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Carregando clientes...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Histórico Section -->
+            <section id="historico-section" class="p-6 hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-900">Histórico de Pedidos</h2>
+                    <p class="text-gray-600">Visualize o histórico completo de pedidos</p>
+                </div>
+
+
+                <!-- Filtros do Histórico -->
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Buscar</label>
+                            <input type="text" id="search-historico" placeholder="Cliente, telefone, ID..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                            <select id="filter-status-historico" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Todos os status</option>
+                                <option value="pendente">Pendente</option>
+                                <option value="confirmado">Confirmado</option>
+                                <option value="entregue">Entregue</option>
+                                <option value="cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Data Inicial</label>
+                            <input type="date" id="filter-data-inicial" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Data Final</label>
+                            <input type="date" id="filter-data-final" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button onclick="applyHistoryFilters()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+                            Aplicar Filtros
+                        </button>
+                        <button onclick="clearHistoryFilters()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm">
+                            Limpar
+                        </button>
+                    </div>
+                </div>
+
+
+                <!-- Estatísticas do Período -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 rounded-lg">
+                                <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Total de Pedidos</p>
+                                <p id="hist-total-pedidos" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 rounded-lg">
+                                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Entregues</p>
+                                <p id="hist-entregues" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-yellow-100 rounded-lg">
+                                <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Pendentes</p>
+                                <p id="hist-pendentes" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-red-100 rounded-lg">
+                                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600">Cancelados</p>
+                                <p id="hist-cancelados" class="text-2xl font-semibold text-gray-900">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Tabela do Histórico -->
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pedido</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Itens</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historico-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">Carregando histórico...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Relatórios Section -->
+            <section id="relatorios-section" class="p-6 hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-900">Relatórios</h2>
+                    <p class="text-gray-600">Análises e relatórios do sistema</p>
+                </div>
+
+
+                <!-- Report Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Relatório de Estoque</h3>
+                                <p class="text-sm text-gray-600">Lista completa de produtos</p>
+                            </div>
+                            <button onclick="generateStockReport()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Gerar
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Produtos em Baixa</h3>
+                                <p class="text-sm text-gray-600">Produtos com estoque baixo</p>
+                            </div>
+                            <button onclick="generateLowStockReport()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Gerar
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Relatório de Pedidos</h3>
+                                <p class="text-sm text-gray-600">Histórico de pedidos</p>
+                            </div>
+                            <button onclick="generateOrdersReport()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Gerar
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Lista de Clientes</h3>
+                                <p class="text-sm text-gray-600">Cadastro de clientes</p>
+                            </div>
+                            <button onclick="generateClientsReport()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Gerar
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Movimentações</h3>
+                                <p class="text-sm text-gray-600">Histórico de movimentações</p>
+                            </div>
+                            <button onclick="generateMovementsReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Gerar
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Backup Completo</h3>
+                                <p class="text-sm text-gray-600">Exportar todos os dados</p>
+                            </div>
+                            <button onclick="generateFullBackup()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Exportar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Quick Stats -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Estatísticas Rápidas</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-blue-600" id="stats-total-produtos">0</div>
+                            <div class="text-sm text-gray-600">Total de Produtos</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-green-600" id="stats-total-pedidos">0</div>
+                            <div class="text-sm text-gray-600">Total de Pedidos</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-purple-600" id="stats-total-clientes">0</div>
+                            <div class="text-sm text-gray-600">Total de Clientes</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-yellow-600" id="stats-produtos-baixo">0</div>
+                            <div class="text-sm text-gray-600">Produtos em Baixa</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+
+    <!-- Client Modal -->
+    <div id="client-modal" class="fixed inset-0 bg-black bg-opacity-50 modal-overlay hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900" id="client-modal-title">Novo Cliente</h3>
+                </div>
+                <form id="client-form" class="p-6 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Nome/Razão Social *</label>
+                            <input type="text" id="client-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Nome Fantasia</label>
+                            <input type="text" id="client-fantasy-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Telefone *</label>
+                            <input type="tel" id="client-phone" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="(11) 99999-9999">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input type="email" id="client-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">CPF/CNPJ</label>
+                            <input type="text" id="client-document" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Endereço</label>
+                        <input type="text" id="client-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                            <input type="text" id="client-neighborhood" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                            <input type="text" id="client-zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="00000-000">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
+                            <input type="text" id="client-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+                            <select id="client-state" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Selecione</option>
+                                <option value="AC">AC</option>
+                                <option value="AL">AL</option>
+                                <option value="AP">AP</option>
+                                <option value="AM">AM</option>
+                                <option value="BA">BA</option>
+                                <option value="CE">CE</option>
+                                <option value="DF">DF</option>
+                                <option value="ES">ES</option>
+                                <option value="GO">GO</option>
+                                <option value="MA">MA</option>
+                                <option value="MT">MT</option>
+                                <option value="MS">MS</option>
+                                <option value="MG">MG</option>
+                                <option value="PA">PA</option>
+                                <option value="PB">PB</option>
+                                <option value="PR">PR</option>
+                                <option value="PE">PE</option>
+                                <option value="PI">PI</option>
+                                <option value="RJ">RJ</option>
+                                <option value="RN">RN</option>
+                                <option value="RS">RS</option>
+                                <option value="RO">RO</option>
+                                <option value="RR">RR</option>
+                                <option value="SC">SC</option>
+                                <option value="SP">SP</option>
+                                <option value="SE">SE</option>
+                                <option value="TO">TO</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                        <textarea id="client-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observações sobre o cliente..."></textarea>
+                    </div>
+                </form>
+                <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                    <button onclick="closeClientModal()" class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Cancelar</button>
+                    <button onclick="saveClient()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Order Modal -->
+    <div id="order-modal" class="fixed inset-0 bg-black bg-opacity-50 modal-overlay hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900" id="order-modal-title">Novo Pedido</h3>
+                </div>
+                <form id="order-form" class="p-6 space-y-6">
+                    <!-- Dados do Cliente -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-md font-medium text-gray-900">Dados do Cliente</h4>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="showClientSelector()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center">
+                                    <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    Buscar Cliente
+                                </button>
+                                <button type="button" onclick="clearClientData()" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm">
+                                    Limpar
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Seletor de Cliente -->
+                        <div id="client-selector" class="hidden mb-4 p-3 bg-white border border-gray-200 rounded-lg">
+                            <div class="flex gap-2 mb-3">
+                                <input type="text" id="client-search" placeholder="Buscar por nome, telefone ou documento..." class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <button type="button" onclick="hideClientSelector()" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm">
+                                    Fechar
+                                </button>
+                            </div>
+                            <div id="client-list" class="max-h-40 overflow-y-auto space-y-1">
+                                <!-- Lista de clientes será carregada aqui -->
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nome/Razão Social *</label>
+                                <input type="text" id="order-customer-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nome Fantasia</label>
+                                <input type="text" id="order-fantasy-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Telefone *</label>
+                                <input type="tel" id="order-customer-phone" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                <input type="email" id="order-customer-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">CNPJ</label>
+                                <input type="text" id="order-cnpj" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Endereço</label>
+                            <input type="text" id="order-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                                <input type="text" id="order-neighborhood" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                                <input type="text" id="order-zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
+                                <input type="text" id="order-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+                                <select id="order-state" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="">Selecione</option>
+                                    <option value="SP">SP</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="MG">MG</option>
+                                    <option value="RS">RS</option>
+                                    <option value="PR">PR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="BA">BA</option>
+                                    <option value="GO">GO</option>
+                                    <option value="PE">PE</option>
+                                    <option value="CE">CE</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Transportadora -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Transportadora</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Razão Social</label>
+                                <input type="text" id="carrier-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">CNPJ</label>
+                                <input type="text" id="carrier-cnpj" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Endereço</label>
+                            <input type="text" id="carrier-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                                <input type="text" id="carrier-neighborhood" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                                <input type="text" id="carrier-zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
+                                <input type="text" id="carrier-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">UF</label>
+                                <select id="carrier-state" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="">Selecione</option>
+                                    <option value="SP">SP</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="MG">MG</option>
+                                    <option value="RS">RS</option>
+                                    <option value="PR">PR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="BA">BA</option>
+                                    <option value="GO">GO</option>
+                                    <option value="PE">PE</option>
+                                    <option value="CE">CE</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
+                                <input type="tel" id="carrier-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Configurações do Pedido -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Configurações do Pedido</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Pedido *</label>
+                                <select id="order-type" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" onchange="updateOrderPricing()">
+                                    <option value="caixa-fechada">Caixa Fechada</option>
+                                    <option value="caixa-fracionada">Caixa Fracionada</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                                <select id="order-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <option value="pendente">Pendente</option>
+                                    <option value="confirmado">Confirmado</option>
+                                    <option value="entregue">Entregue</option>
+                                    <option value="cancelado">Cancelado</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Itens do Pedido -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-md font-medium text-gray-900">Itens do Pedido</h4>
+                            <button type="button" onclick="addOrderItem()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                + Adicionar Item
+                            </button>
+                        </div>
+                        <div id="order-items-container" class="space-y-3">
+                            <!-- Items will be added here -->
+                        </div>
+                    </div>
+
+
+                    <!-- Totais do Pedido -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Totais do Pedido</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Subtotal</label>
+                                <input type="text" id="order-subtotal" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600" value="R$ 0,00">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Desconto (%)</label>
+                                <input type="number" id="order-discount" min="0" max="100" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" onchange="calculateOrderTotal()">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Total</label>
+                                <input type="text" id="order-total" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 font-bold" value="R$ 0,00">
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Observações -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                        <textarea id="order-notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observações sobre o pedido..."></textarea>
+                    </div>
+                </form>
+                <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                    <button onclick="closeOrderModal()" class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Cancelar</button>
+                    <button onclick="saveOrder()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Salvar Pedido</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Product Modal -->
+    <div id="product-modal" class="fixed inset-0 bg-black bg-opacity-50 modal-overlay hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900" id="product-modal-title">Novo Produto</h3>
+                </div>
+                <form id="product-form" class="p-6 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Código do Produto</label>
+                            <input type="text" id="product-code" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: HAL001">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
+                            <input type="text" id="product-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                        <select id="product-category" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Selecione uma categoria</option>
+                            <option value="halloween">Halloween</option>
+                            <option value="mascaras">Máscaras</option>
+                            <option value="tiaras">Tiaras</option>
+                            <option value="chapeu">Chapéu</option>
+                            <option value="luvas">Luvas</option>
+                            <option value="aderecoes">Adereços</option>
+                            <option value="saias">Saias</option>
+                            <option value="acessorios-balao">Acessórios para balão</option>
+                            <option value="led">LED</option>
+                            <option value="lanca-confete">Lança Confete</option>
+                            <option value="animais">Animais</option>
+                            <option value="cortinas-metalizadas">Cortinas Metalizadas</option>
+                            <option value="utilidades">Utilidades</option>
+                            <option value="envelopes">Envelopes</option>
+                            <option value="lc">LC</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Quantidade em Estoque *</label>
+                            <input type="number" id="product-quantity" min="0" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo *</label>
+                            <input type="number" id="product-min-stock" min="0" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Quantidade por Caixa</label>
+                            <input type="number" id="product-box-quantity" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: 12">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Rua</label>
+                            <input type="text" id="product-street" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: A">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Fila</label>
+                            <input type="text" id="product-row" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: 1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Área</label>
+                            <input type="text" id="product-area" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ex: Depósito">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Valor Unitário</label>
+                            <div class="relative">
+                                <span class="absolute left-3 top-2 text-gray-500">R$</span>
+                                <input type="number" id="product-unit-price" min="0" step="0.01" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0,00">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
+                        <textarea id="product-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Descrição do produto..."></textarea>
+                    </div>
+                </form>
+                <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                    <button onclick="closeProductModal()" class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Cancelar</button>
+                    <button onclick="saveProduct()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Configuração do Supabase com suas credenciais
+        const SUPABASE_URL = 'https://xxnijmtpxnfzfiqfvemp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4bmlqbXRweG5memZpcWZ2ZW1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NzM3MTEsImV4cCI6MjA3MDI0OTcxMX0.9VNGYO7qeqh_6ld9EXNw-9vkqfs8zDACIeVT5lPGcx4';
+
+
+        // Inicializar cliente Supabase
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let isConnected = false;
+
+
+        // Funções auxiliares para o modal de setup
+        function showSetupModal() {
+            document.getElementById('setup-modal').classList.remove('hidden');
+        }
+
+
+        function closeSetupModal() {
+            document.getElementById('setup-modal').classList.add('hidden');
+        }
+
+
+        function copySQL() {
+            const sqlCode = document.getElementById('sql-code').textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                alert('SQL copiado para a área de transferência!');
+            }).catch(() => {
+                alert('Não foi possível copiar automaticamente. Selecione e copie o texto manualmente.');
+            });
+        }
+
+
+        function openSupabaseDashboard() {
+            window.open('https://supabase.com/dashboard/project/xxnijmtpxnfzfiqfvemp', '_blank');
+        }
+
+
+        // Função para atualizar status da conexão
+        function updateConnectionStatus(status, message) {
+            const statusEl = document.getElementById('connection-status');
+            statusEl.className = `connection-status connection-${status}`;
+            statusEl.innerHTML = status === 'loading' 
+                ? `<div class="loading-spinner"></div>${message}`
+                : message;
+        }
+
+
+        // Função para testar conexão e criar tabelas se necessário
+        async function initializeDatabase() {
+            try {
+                updateConnectionStatus('loading', 'Conectando ao Supabase...');
+                
+                // Testar conexão tentando buscar produtos
+                const { data, error } = await supabase.from('produtos').select('*').limit(1);
+                
+                if (error) {
+                    console.log('Erro detectado:', error);
+                    if (error.code === 'PGRST116' || error.message.includes('relation') || error.message.includes('does not exist')) {
+                        // Tabela não existe - mostrar instruções
+                        updateConnectionStatus('offline', 'Tabelas não encontradas - Configure o banco');
+                        showSetupModal();
+                        return false;
+                    } else {
+                        throw error;
+                    }
+                }
+
+
+                isConnected = true;
+                updateConnectionStatus('online', 'Conectado ao Supabase ✓');
+                console.log('✅ Conexão estabelecida com sucesso!');
+                return true;
+                
+            } catch (error) {
+                console.error('Erro na conexão:', error);
+                updateConnectionStatus('offline', 'Erro na conexão: ' + error.message);
+                showSetupModal();
+                return false;
+            }
+        }
+
+
+        // Sistema de Controle de Estoque
+        class EstoqueSystem {
+            constructor() {
+                this.produtos = [];
+                this.currentEditingProduct = null;
+                this.init();
+            }
+
+
+            async init() {
+                console.log('🚀 Iniciando sistema de estoque...');
+                
+                // Inicializar banco de dados
+                const dbReady = await initializeDatabase();
+                if (!dbReady) {
+                    console.log('❌ Banco de dados não está pronto');
+                    return;
+                }
+
+
+                try {
+                    this.setupEventListeners();
+                    await this.loadAllData();
+                    this.loadDashboard();
+                    this.loadProducts();
+                    this.loadOrders();
+                    this.loadClients();
+                    this.loadHistory();
+                    this.loadReports();
+                    this.updateStats();
+                    
+                    console.log('✅ Sistema inicializado com sucesso!');
+                } catch (error) {
+                    console.error('❌ Erro na inicialização:', error);
+                    updateConnectionStatus('offline', 'Erro ao carregar dados: ' + error.message);
+                }
+            }
+
+
+            async loadAllData() {
+                try {
+                    updateConnectionStatus('loading', 'Carregando dados...');
+                    
+                    // Carregar produtos
+                    const { data: produtos, error: produtosError } = await supabase
+                        .from('produtos')
+                        .select('*')
+                        .order('name');
+
+
+                    if (produtosError) throw produtosError;
+
+
+                    // Carregar pedidos
+                    const { data: pedidos, error: pedidosError } = await supabase
+                        .from('pedidos')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+
+
+                    if (pedidosError && pedidosError.code !== 'PGRST116') throw pedidosError;
+
+
+                    // Carregar clientes
+                    const { data: clientes, error: clientesError } = await supabase
+                        .from('clientes')
+                        .select('*')
+                        .order('name');
+
+
+                    if (clientesError && clientesError.code !== 'PGRST116') throw clientesError;
+
+
+                    this.produtos = produtos || [];
+                    this.pedidos = pedidos || [];
+                    this.clientes = clientes || [];
+                    
+                    updateConnectionStatus('online', 'Dados carregados ✓');
+                } catch (error) {
+                    console.error('Erro ao carregar dados:', error);
+                    updateConnectionStatus('offline', 'Erro ao carregar dados');
+                    throw error;
+                }
+            }
+
+
+            setupEventListeners() {
+                // Menu toggle
+                document.getElementById('menu-toggle').addEventListener('click', () => {
+                    const sidebar = document.getElementById('sidebar');
+                    const overlay = document.getElementById('sidebar-overlay');
+                    
+                    sidebar.classList.toggle('-translate-x-full');
+                    overlay.classList.toggle('hidden');
+                });
+
+
+                // Sidebar overlay
+                document.getElementById('sidebar-overlay').addEventListener('click', () => {
+                    const sidebar = document.getElementById('sidebar');
+                    const overlay = document.getElementById('sidebar-overlay');
+                    
+                    sidebar.classList.add('-translate-x-full');
+                    overlay.classList.add('hidden');
+                });
+
+
+                // Search and filters
+                document.getElementById('search-produtos').addEventListener('input', () => this.filterProducts());
+                document.getElementById('filter-categoria').addEventListener('change', () => this.filterProducts());
+                document.getElementById('filter-status').addEventListener('change', () => this.filterProducts());
+            }
+
+
+            showSection(sectionName) {
+                // Hide all sections
+                const allSections = document.querySelectorAll('main > section');
+                allSections.forEach(section => {
+                    section.classList.add('hidden');
+                });
+
+
+                // Show selected section
+                const targetSection = document.getElementById(`${sectionName}-section`);
+                if (targetSection) {
+                    targetSection.classList.remove('hidden');
+                }
+
+
+                // Update navigation
+                const navItems = document.querySelectorAll('.nav-item');
+                navItems.forEach(item => {
+                    item.classList.remove('active', 'bg-blue-100', 'text-blue-700');
+                    item.classList.add('text-gray-700');
+                });
+
+
+                navItems.forEach(button => {
+                    const onclickAttr = button.getAttribute('onclick');
+                    if (onclickAttr && onclickAttr.includes(`showSection('${sectionName}')`)) {
+                        button.classList.add('active', 'bg-blue-100', 'text-blue-700');
+                        button.classList.remove('text-gray-700');
+                    }
+                });
+
+
+                // Close mobile menu
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('sidebar-overlay');
+                if (sidebar && overlay) {
+                    sidebar.classList.add('-translate-x-full');
+                    overlay.classList.add('hidden');
+                }
+            }
+
+
+            loadDashboard() {
+                this.updateStats();
+                this.loadRecentActivities();
+            }
+
+
+            updateStats() {
+                const totalProdutos = this.produtos.length;
+                const produtosEmEstoque = this.produtos.filter(p => p.quantity > p.min_stock).length;
+                const produtosBaixoEstoque = this.produtos.filter(p => p.quantity > 0 && p.quantity <= p.min_stock).length;
+                const produtosSemEstoque = this.produtos.filter(p => p.quantity === 0).length;
+
+
+                document.getElementById('total-produtos').textContent = totalProdutos;
+                document.getElementById('produtos-estoque').textContent = produtosEmEstoque;
+                document.getElementById('produtos-baixo-estoque').textContent = produtosBaixoEstoque;
+                document.getElementById('produtos-sem-estoque').textContent = produtosSemEstoque;
+
+
+                // Update notification badge
+                const alertCount = produtosBaixoEstoque + produtosSemEstoque;
+                const badge = document.getElementById('notification-badge');
+                if (alertCount > 0) {
+                    badge.textContent = alertCount;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+
+
+            loadRecentActivities() {
+                const container = document.getElementById('recent-activities');
+                
+                if (this.produtos.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhuma atividade recente</p>';
+                    return;
+                }
+
+
+                // Mostrar produtos com baixo estoque como atividades
+                const lowStockProducts = this.produtos.filter(p => p.quantity <= p.min_stock);
+                
+                if (lowStockProducts.length === 0) {
+                    container.innerHTML = '<p class="text-green-600 text-center py-8">✅ Todos os produtos estão com estoque adequado!</p>';
+                    return;
+                }
+
+
+                container.innerHTML = lowStockProducts.slice(0, 5).map(produto => `
+                    <div class="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-yellow-100 rounded-lg mr-3">
+                                <svg class="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-900">${produto.name}</p>
+                                <p class="text-sm text-gray-600">Estoque: ${produto.quantity} (mín: ${produto.min_stock})</p>
+                            </div>
+                        </div>
+                        <span class="status-badge ${produto.quantity === 0 ? 'status-sem-estoque' : 'status-baixo-estoque'}">
+                            ${produto.quantity === 0 ? 'Sem Estoque' : 'Baixo Estoque'}
+                        </span>
+                    </div>
+                `).join('');
+            }
+
+
+            loadProducts() {
+                const tbody = document.getElementById('produtos-table-body');
+                
+                if (this.produtos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Nenhum produto cadastrado</td></tr>';
+                    return;
+                }
+
+
+                tbody.innerHTML = this.produtos.map(produto => {
+                    const status = this.getProductStatus(produto);
+                    const statusClass = this.getStatusClass(status);
+                    const location = [produto.street, produto.row, produto.area].filter(item => item).join('-') || 'Não definido';
+                    
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">${produto.name}</div>
+                                    <div class="text-sm text-gray-500">Código: ${produto.code || produto.id} | Localização: ${location}</div>
+                                    <div class="text-sm text-gray-400">${produto.description || 'Sem descrição'}</div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${this.getCategoryName(produto.category)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${produto.quantity}${produto.box_quantity ? ` (${Math.floor(produto.quantity / produto.box_quantity)} cx)` : ''}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="status-badge ${statusClass}">${status}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="estoqueSystem.editProduct(${produto.id})" class="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
+                                <button onclick="estoqueSystem.deleteProduct(${produto.id})" class="text-red-600 hover:text-red-900">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+
+            filterProducts() {
+                const searchTerm = document.getElementById('search-produtos').value.toLowerCase();
+                const categoryFilter = document.getElementById('filter-categoria').value;
+                const statusFilter = document.getElementById('filter-status').value;
+
+
+                let filteredProducts = this.produtos;
+
+
+                if (searchTerm) {
+                    filteredProducts = filteredProducts.filter(produto => 
+                        produto.name.toLowerCase().includes(searchTerm) ||
+                        (produto.code && produto.code.toLowerCase().includes(searchTerm)) ||
+                        (produto.description && produto.description.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+
+                if (categoryFilter) {
+                    filteredProducts = filteredProducts.filter(produto => produto.category === categoryFilter);
+                }
+
+
+                if (statusFilter) {
+                    filteredProducts = filteredProducts.filter(produto => {
+                        const status = this.getProductStatus(produto);
+                        return status.toLowerCase().replace(' ', '-') === statusFilter;
+                    });
+                }
+
+
+                // Atualizar tabela com produtos filtrados
+                const tbody = document.getElementById('produtos-table-body');
+                
+                if (filteredProducts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Nenhum produto encontrado</td></tr>';
+                    return;
+                }
+
+
+                tbody.innerHTML = filteredProducts.map(produto => {
+                    const status = this.getProductStatus(produto);
+                    const statusClass = this.getStatusClass(status);
+                    const location = [produto.street, produto.row, produto.area].filter(item => item).join('-') || 'Não definido';
+                    
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">${produto.name}</div>
+                                    <div class="text-sm text-gray-500">Código: ${produto.code || produto.id} | Localização: ${location}</div>
+                                    <div class="text-sm text-gray-400">${produto.description || 'Sem descrição'}</div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${this.getCategoryName(produto.category)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${produto.quantity}${produto.box_quantity ? ` (${Math.floor(produto.quantity / produto.box_quantity)} cx)` : ''}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="status-badge ${statusClass}">${status}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="estoqueSystem.editProduct(${produto.id})" class="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
+                                <button onclick="estoqueSystem.deleteProduct(${produto.id})" class="text-red-600 hover:text-red-900">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+
+            async saveProduct() {
+                const code = document.getElementById('product-code').value;
+                const name = document.getElementById('product-name').value;
+                const category = document.getElementById('product-category').value;
+                const quantity = parseInt(document.getElementById('product-quantity').value);
+                const minStock = parseInt(document.getElementById('product-min-stock').value);
+                const boxQuantity = parseInt(document.getElementById('product-box-quantity').value) || null;
+                const street = document.getElementById('product-street').value;
+                const row = document.getElementById('product-row').value;
+                const area = document.getElementById('product-area').value;
+                const unitPrice = parseFloat(document.getElementById('product-unit-price').value) || 0;
+                const description = document.getElementById('product-description').value;
+
+
+                if (!name || !category || quantity < 0 || minStock < 0) {
+                    alert('Por favor, preencha todos os campos obrigatórios.');
+                    return;
+                }
+
+
+                try {
+                    const productData = {
+                        code,
+                        name,
+                        category,
+                        quantity,
+                        min_stock: minStock,
+                        box_quantity: boxQuantity,
+                        street,
+                        row,
+                        area,
+                        unit_price: unitPrice,
+                        description,
+                        updated_at: new Date().toISOString()
+                    };
+
+
+                    let result;
+                    if (this.currentEditingProduct) {
+                        // Atualizar produto existente
+                        result = await supabase
+                            .from('produtos')
+                            .update(productData)
+                            .eq('id', this.currentEditingProduct)
+                            .select();
+                    } else {
+                        // Criar novo produto
+                        result = await supabase
+                            .from('produtos')
+                            .insert([productData])
+                            .select();
+                    }
+
+
+                    if (result.error) throw result.error;
+
+
+                    await this.loadAllData();
+                    this.loadProducts();
+                    this.updateStats();
+                    this.loadRecentActivities();
+                    this.closeProductModal();
+                    
+                    alert('Produto salvo com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao salvar produto:', error);
+                    alert('Erro ao salvar produto: ' + error.message);
+                }
+            }
+
+
+            async deleteProduct(productId) {
+                if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+
+
+                try {
+                    const { error } = await supabase
+                        .from('produtos')
+                        .delete()
+                        .eq('id', productId);
+
+
+                    if (error) throw error;
+
+
+                    await this.loadAllData();
+                    this.loadProducts();
+                    this.updateStats();
+                    this.loadRecentActivities();
+                    
+                    alert('Produto excluído com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao excluir produto:', error);
+                    alert('Erro ao excluir produto: ' + error.message);
+                }
+            }
+
+
+            editProduct(productId) {
+                const produto = this.produtos.find(p => p.id === productId);
+                if (!produto) return;
+
+
+                this.openProductModal(productId);
+            }
+
+
+            openProductModal(productId = null) {
+                this.currentEditingProduct = productId;
+                const modal = document.getElementById('product-modal');
+                const title = document.getElementById('product-modal-title');
+                
+                if (productId) {
+                    const produto = this.produtos.find(p => p.id === productId);
+                    title.textContent = 'Editar Produto';
+                    
+                    document.getElementById('product-code').value = produto.code || '';
+                    document.getElementById('product-name').value = produto.name;
+                    document.getElementById('product-category').value = produto.category;
+                    document.getElementById('product-quantity').value = produto.quantity;
+                    document.getElementById('product-min-stock').value = produto.min_stock;
+                    document.getElementById('product-box-quantity').value = produto.box_quantity || '';
+                    document.getElementById('product-street').value = produto.street || '';
+                    document.getElementById('product-row').value = produto.row || '';
+                    document.getElementById('product-area').value = produto.area || '';
+                    document.getElementById('product-unit-price').value = produto.unit_price || '';
+                    document.getElementById('product-description').value = produto.description || '';
+                } else {
+                    title.textContent = 'Novo Produto';
+                    document.getElementById('product-form').reset();
+                }
+                
+                modal.classList.remove('hidden');
+            }
+
+
+            closeProductModal() {
+                document.getElementById('product-modal').classList.add('hidden');
+                this.currentEditingProduct = null;
+            }
+
+
+            getProductStatus(produto) {
+                if (produto.quantity === 0) return 'Sem Estoque';
+                if (produto.quantity <= produto.min_stock) return 'Baixo Estoque';
+                return 'Em Estoque';
+            }
+
+
+            getStatusClass(status) {
+                switch (status) {
+                    case 'Em Estoque': return 'status-em-estoque';
+                    case 'Baixo Estoque': return 'status-baixo-estoque';
+                    case 'Sem Estoque': return 'status-sem-estoque';
+                    default: return 'status-em-estoque';
+                }
+            }
+
+
+            getCategoryName(category) {
+                const categories = {
+                    'halloween': 'Halloween',
+                    'mascaras': 'Máscaras',
+                    'tiaras': 'Tiaras',
+                    'chapeu': 'Chapéu',
+                    'luvas': 'Luvas',
+                    'aderecoes': 'Adereços',
+                    'saias': 'Saias',
+                    'acessorios-balao': 'Acessórios para balão',
+                    'led': 'LED',
+                    'lanca-confete': 'Lança Confete',
+                    'animais': 'Animais',
+                    'cortinas-metalizadas': 'Cortinas Metalizadas',
+                    'utilidades': 'Utilidades',
+                    'envelopes': 'Envelopes',
+                    'lc': 'LC'
+                };
+                return categories[category] || category;
+            }
+
+
+            // Métodos para Pedidos
+            loadOrders() {
+                const tbody = document.getElementById('pedidos-table-body');
+                
+                if (!this.pedidos || this.pedidos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Nenhum pedido cadastrado</td></tr>';
+                    return;
+                }
+
+
+                tbody.innerHTML = this.pedidos.map(pedido => {
+                    const date = new Date(pedido.created_at).toLocaleDateString('pt-BR');
+                    const statusClass = this.getOrderStatusClass(pedido.status);
+                    
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">#${pedido.id}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">${pedido.customer_name}</div>
+                                <div class="text-sm text-gray-500">${pedido.customer_phone}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${pedido.order_type === 'caixa-fechada' ? 'Caixa Fechada' : 'Caixa Fracionada'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="status-badge ${statusClass}">${this.getOrderStatusName(pedido.status)}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${date}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="estoqueSystem.viewOrder(${pedido.id})" class="text-blue-600 hover:text-blue-900 mr-3">Ver</button>
+                                <button onclick="estoqueSystem.editOrder(${pedido.id})" class="text-green-600 hover:text-green-900 mr-3">Editar</button>
+                                <button onclick="estoqueSystem.deleteOrder(${pedido.id})" class="text-red-600 hover:text-red-900">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+
+            getOrderStatusClass(status) {
+                switch (status) {
+                    case 'pendente': return 'status-pendente';
+                    case 'confirmado': return 'status-confirmado';
+                    case 'entregue': return 'status-entregue';
+                    case 'cancelado': return 'status-cancelado';
+                    default: return 'status-pendente';
+                }
+            }
+
+
+            getOrderStatusName(status) {
+                const statusNames = {
+                    'pendente': 'Pendente',
+                    'confirmado': 'Confirmado',
+                    'entregue': 'Entregue',
+                    'cancelado': 'Cancelado'
+                };
+                return statusNames[status] || status;
+            }
+
+
+            // Métodos para Clientes
+            loadClients() {
+                const tbody = document.getElementById('clientes-table-body');
+                
+                if (!this.clientes || this.clientes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">Nenhum cliente cadastrado</td></tr>';
+                    return;
+                }
+
+
+                tbody.innerHTML = this.clientes.map(cliente => {
+                    const date = new Date(cliente.created_at).toLocaleDateString('pt-BR');
+                    const location = [cliente.city, cliente.state].filter(item => item).join(', ') || 'Não informado';
+                    
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">${cliente.name}</div>
+                                <div class="text-sm text-gray-500">${cliente.fantasy_name || 'Pessoa Física'}</div>
+                                <div class="text-sm text-gray-400">${cliente.document || 'Sem documento'}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">${cliente.phone}</div>
+                                <div class="text-sm text-gray-500">${cliente.email || 'Sem email'}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${location}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${date}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="estoqueSystem.editClient(${cliente.id})" class="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
+                                <button onclick="estoqueSystem.deleteClient(${cliente.id})" class="text-red-600 hover:text-red-900">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+
+            // Métodos para Histórico
+            loadHistory() {
+                this.filteredHistory = this.pedidos || [];
+                this.renderHistory();
+                this.updateHistoryStats();
+            }
+
+
+            renderHistory() {
+                const tbody = document.getElementById('historico-table-body');
+                
+                if (!this.filteredHistory || this.filteredHistory.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">Nenhum pedido encontrado</td></tr>';
+                    return;
+                }
+
+
+                tbody.innerHTML = this.filteredHistory.map(pedido => {
+                    const date = new Date(pedido.created_at).toLocaleDateString('pt-BR');
+                    const time = new Date(pedido.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    const statusClass = this.getOrderStatusClass(pedido.status);
+                    const itemsCount = pedido.items ? pedido.items.length : 0;
+                    const itemsText = itemsCount === 1 ? '1 item' : `${itemsCount} itens`;
+                    
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">#${pedido.id}</div>
+                                <div class="text-sm text-gray-500">${time}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">${pedido.customer_name}</div>
+                                <div class="text-sm text-gray-500">${pedido.customer_phone}</div>
+                                <div class="text-sm text-gray-400">${pedido.city || 'Cidade não informada'}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">${itemsText}</div>
+                                <div class="text-sm text-gray-500">${pedido.discount_percent > 0 ? `Desc: ${pedido.discount_percent}%` : 'Sem desconto'}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${pedido.order_type === 'caixa-fechada' ? 'Caixa Fechada' : 'Caixa Fracionada'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="status-badge ${statusClass}">${this.getOrderStatusName(pedido.status)}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${date}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="estoqueSystem.viewOrderDetails(${pedido.id})" class="text-blue-600 hover:text-blue-900 mr-3">Detalhes</button>
+                                <button onclick="estoqueSystem.duplicateOrder(${pedido.id})" class="text-green-600 hover:text-green-900 mr-3">Duplicar</button>
+                                ${pedido.status !== 'cancelado' ? `<button onclick="estoqueSystem.changeOrderStatus(${pedido.id})" class="text-purple-600 hover:text-purple-900">Status</button>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+
+            updateHistoryStats() {
+                const pedidos = this.filteredHistory || [];
+                
+                document.getElementById('hist-total-pedidos').textContent = pedidos.length;
+                document.getElementById('hist-entregues').textContent = pedidos.filter(p => p.status === 'entregue').length;
+                document.getElementById('hist-pendentes').textContent = pedidos.filter(p => p.status === 'pendente').length;
+                document.getElementById('hist-cancelados').textContent = pedidos.filter(p => p.status === 'cancelado').length;
+            }
+
+
+            applyHistoryFilters() {
+                const searchTerm = document.getElementById('search-historico').value.toLowerCase();
+                const statusFilter = document.getElementById('filter-status-historico').value;
+                const dataInicial = document.getElementById('filter-data-inicial').value;
+                const dataFinal = document.getElementById('filter-data-final').value;
+
+
+                let filtered = this.pedidos || [];
+
+
+                // Filtro de busca
+                if (searchTerm) {
+                    filtered = filtered.filter(pedido => 
+                        pedido.customer_name.toLowerCase().includes(searchTerm) ||
+                        pedido.customer_phone.includes(searchTerm) ||
+                        pedido.id.toString().includes(searchTerm) ||
+                        (pedido.city && pedido.city.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+
+                // Filtro de status
+                if (statusFilter) {
+                    filtered = filtered.filter(pedido => pedido.status === statusFilter);
+                }
+
+
+                // Filtro de data
+                if (dataInicial) {
+                    const dataIni = new Date(dataInicial);
+                    filtered = filtered.filter(pedido => new Date(pedido.created_at) >= dataIni);
+                }
+
+
+                if (dataFinal) {
+                    const dataFim = new Date(dataFinal);
+                    dataFim.setHours(23, 59, 59, 999); // Incluir todo o dia final
+                    filtered = filtered.filter(pedido => new Date(pedido.created_at) <= dataFim);
+                }
+
+
+                this.filteredHistory = filtered;
+                this.renderHistory();
+                this.updateHistoryStats();
+            }
+
+
+            clearHistoryFilters() {
+                document.getElementById('search-historico').value = '';
+                document.getElementById('filter-status-historico').value = '';
+                document.getElementById('filter-data-inicial').value = '';
+                document.getElementById('filter-data-final').value = '';
+                
+                this.filteredHistory = this.pedidos || [];
+                this.renderHistory();
+                this.updateHistoryStats();
+            }
+
+
+            viewOrderDetails(orderId) {
+                const pedido = this.pedidos.find(p => p.id === orderId);
+                if (!pedido) return;
+
+
+                let itemsHtml = '';
+                if (pedido.items && pedido.items.length > 0) {
+                    itemsHtml = pedido.items.map(item => `
+                        <div class="flex justify-between py-2 border-b border-gray-100">
+                            <span>${item.product_name || 'Produto não identificado'}</span>
+                            <span>${item.quantity}x R$ ${(item.unit_price || 0).toFixed(2)}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    itemsHtml = '<p class="text-gray-500">Nenhum item cadastrado</p>';
+                }
+
+
+                const modalContent = `
+                    <div class="fixed inset-0 bg-black bg-opacity-50 modal-overlay z-50" onclick="closeOrderDetailsModal()">
+                        <div class="flex items-center justify-center min-h-screen p-4">
+                            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+                                <div class="px-6 py-4 border-b border-gray-200">
+                                    <h3 class="text-lg font-medium text-gray-900">Detalhes do Pedido #${pedido.id}</h3>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <h4 class="font-medium text-gray-900">Cliente</h4>
+                                            <p class="text-gray-600">${pedido.customer_name}</p>
+                                            <p class="text-gray-500">${pedido.customer_phone}</p>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-medium text-gray-900">Status</h4>
+                                            <span class="status-badge ${this.getOrderStatusClass(pedido.status)}">${this.getOrderStatusName(pedido.status)}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 class="font-medium text-gray-900 mb-2">Endereço de Entrega</h4>
+                                        <p class="text-gray-600">${pedido.address || 'Não informado'}</p>
+                                        <p class="text-gray-600">${[pedido.neighborhood, pedido.city, pedido.state].filter(item => item).join(', ') || 'Localização não informada'}</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 class="font-medium text-gray-900 mb-2">Itens do Pedido</h4>
+                                        <div class="bg-gray-50 rounded-lg p-4">
+                                            ${itemsHtml}
+                                        </div>
+                                    </div>
+                                    
+                                    ${pedido.notes ? `
+                                    <div>
+                                        <h4 class="font-medium text-gray-900">Observações</h4>
+                                        <p class="text-gray-600">${pedido.notes}</p>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    <div class="text-sm text-gray-500">
+                                        <p>Criado em: ${new Date(pedido.created_at).toLocaleString('pt-BR')}</p>
+                                        ${pedido.updated_at !== pedido.created_at ? `<p>Atualizado em: ${new Date(pedido.updated_at).toLocaleString('pt-BR')}</p>` : ''}
+                                    </div>
+                                </div>
+                                <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+                                    <button onclick="closeOrderDetailsModal()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg">Fechar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+
+                document.body.insertAdjacentHTML('beforeend', modalContent);
+            }
+
+
+            duplicateOrder(orderId) {
+                const pedido = this.pedidos.find(p => p.id === orderId);
+                if (!pedido) return;
+
+
+                if (confirm('Deseja criar um novo pedido baseado neste?')) {
+                    this.openOrderModal();
+                    
+                    // Preencher dados do pedido original
+                    setTimeout(() => {
+                        document.getElementById('order-customer-name').value = pedido.customer_name;
+                        document.getElementById('order-fantasy-name').value = pedido.fantasy_name || '';
+                        document.getElementById('order-customer-phone').value = pedido.customer_phone;
+                        document.getElementById('order-customer-email').value = pedido.customer_email || '';
+                        document.getElementById('order-cnpj').value = pedido.cnpj || '';
+                        document.getElementById('order-address').value = pedido.address || '';
+                        document.getElementById('order-neighborhood').value = pedido.neighborhood || '';
+                        document.getElementById('order-zipcode').value = pedido.zipcode || '';
+                        document.getElementById('order-city').value = pedido.city || '';
+                        document.getElementById('order-state').value = pedido.state || '';
+                        document.getElementById('order-type').value = pedido.order_type;
+                        document.getElementById('order-discount').value = pedido.discount_percent || 0;
+                        document.getElementById('order-status').value = 'pendente'; // Novo pedido sempre pendente
+                        
+                        // Copiar itens
+                        this.orderItems = pedido.items ? [...pedido.items] : [];
+                        this.renderOrderItems();
+                    }, 100);
+                }
+            }
+
+
+            async changeOrderStatus(orderId) {
+                const pedido = this.pedidos.find(p => p.id === orderId);
+                if (!pedido) return;
+
+
+                const newStatus = prompt(`Status atual: ${this.getOrderStatusName(pedido.status)}\n\nNovo status:\n1 - Pendente\n2 - Confirmado\n3 - Entregue\n4 - Cancelado\n\nDigite o número:`);
+                
+                const statusMap = {
+                    '1': 'pendente',
+                    '2': 'confirmado', 
+                    '3': 'entregue',
+                    '4': 'cancelado'
+                };
+
+
+                if (!statusMap[newStatus]) {
+                    alert('Status inválido!');
+                    return;
+                }
+
+
+                try {
+                    const { error } = await supabase
+                        .from('pedidos')
+                        .update({ 
+                            status: statusMap[newStatus],
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', orderId);
+
+
+                    if (error) throw error;
+
+
+                    await this.loadAllData();
+                    this.loadHistory();
+                    this.loadOrders();
+                    
+                    alert('Status atualizado com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao atualizar status:', error);
+                    alert('Erro ao atualizar status: ' + error.message);
+                }
+            }
+
+
+            // Métodos para Relatórios
+            loadReports() {
+                // Atualizar estatísticas rápidas
+                document.getElementById('stats-total-produtos').textContent = this.produtos.length;
+                document.getElementById('stats-total-pedidos').textContent = this.pedidos ? this.pedidos.length : 0;
+                document.getElementById('stats-total-clientes').textContent = this.clientes ? this.clientes.length : 0;
+                document.getElementById('stats-produtos-baixo').textContent = this.produtos.filter(p => p.quantity <= p.min_stock).length;
+            }
+
+
+            // Métodos para Cliente
+            openClientModal(clientId = null) {
+                this.currentEditingClient = clientId;
+                const modal = document.getElementById('client-modal');
+                const title = document.getElementById('client-modal-title');
+                
+                if (clientId) {
+                    const cliente = this.clientes.find(c => c.id === clientId);
+                    title.textContent = 'Editar Cliente';
+                    
+                    document.getElementById('client-name').value = cliente.name;
+                    document.getElementById('client-fantasy-name').value = cliente.fantasy_name || '';
+                    document.getElementById('client-phone').value = cliente.phone;
+                    document.getElementById('client-email').value = cliente.email || '';
+                    document.getElementById('client-document').value = cliente.document || '';
+                    document.getElementById('client-address').value = cliente.address || '';
+                    document.getElementById('client-neighborhood').value = cliente.neighborhood || '';
+                    document.getElementById('client-zipcode').value = cliente.zipcode || '';
+                    document.getElementById('client-city').value = cliente.city || '';
+                    document.getElementById('client-state').value = cliente.state || '';
+                    document.getElementById('client-notes').value = cliente.notes || '';
+                } else {
+                    title.textContent = 'Novo Cliente';
+                    document.getElementById('client-form').reset();
+                }
+                
+                modal.classList.remove('hidden');
+            }
+
+
+            closeClientModal() {
+                document.getElementById('client-modal').classList.add('hidden');
+                this.currentEditingClient = null;
+            }
+
+
+            async saveClient() {
+                const name = document.getElementById('client-name').value;
+                const fantasyName = document.getElementById('client-fantasy-name').value;
+                const phone = document.getElementById('client-phone').value;
+                const email = document.getElementById('client-email').value;
+                const document = document.getElementById('client-document').value;
+                const address = document.getElementById('client-address').value;
+                const neighborhood = document.getElementById('client-neighborhood').value;
+                const zipcode = document.getElementById('client-zipcode').value;
+                const city = document.getElementById('client-city').value;
+                const state = document.getElementById('client-state').value;
+                const notes = document.getElementById('client-notes').value;
+
+
+                if (!name || !phone) {
+                    alert('Por favor, preencha os campos obrigatórios (Nome e Telefone).');
+                    return;
+                }
+
+
+                try {
+                    const clientData = {
+                        name,
+                        fantasy_name: fantasyName,
+                        phone,
+                        email,
+                        document,
+                        address,
+                        neighborhood,
+                        zipcode,
+                        city,
+                        state,
+                        notes,
+                        updated_at: new Date().toISOString()
+                    };
+
+
+                    let result;
+                    if (this.currentEditingClient) {
+                        result = await supabase
+                            .from('clientes')
+                            .update(clientData)
+                            .eq('id', this.currentEditingClient)
+                            .select();
+                    } else {
+                        result = await supabase
+                            .from('clientes')
+                            .insert([clientData])
+                            .select();
+                    }
+
+
+                    if (result.error) throw result.error;
+
+
+                    await this.loadAllData();
+                    this.loadClients();
+                    this.loadReports();
+                    this.closeClientModal();
+                    
+                    alert('Cliente salvo com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao salvar cliente:', error);
+                    alert('Erro ao salvar cliente: ' + error.message);
+                }
+            }
+
+
+            async deleteClient(clientId) {
+                if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+
+
+                try {
+                    const { error } = await supabase
+                        .from('clientes')
+                        .delete()
+                        .eq('id', clientId);
+
+
+                    if (error) throw error;
+
+
+                    await this.loadAllData();
+                    this.loadClients();
+                    this.loadReports();
+                    
+                    alert('Cliente excluído com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao excluir cliente:', error);
+                    alert('Erro ao excluir cliente: ' + error.message);
+                }
+            }
+
+
+            editClient(clientId) {
+                this.openClientModal(clientId);
+            }
+
+
+            // Métodos para Pedido
+            openOrderModal(orderId = null) {
+                this.currentEditingOrder = orderId;
+                this.orderItems = [];
+                const modal = document.getElementById('order-modal');
+                const title = document.getElementById('order-modal-title');
+                
+                if (orderId) {
+                    const pedido = this.pedidos.find(p => p.id === orderId);
+                    title.textContent = 'Editar Pedido';
+                    
+                    // Preencher dados do cliente
+                    document.getElementById('order-customer-name').value = pedido.customer_name;
+                    document.getElementById('order-fantasy-name').value = pedido.fantasy_name || '';
+                    document.getElementById('order-customer-phone').value = pedido.customer_phone;
+                    document.getElementById('order-customer-email').value = pedido.customer_email || '';
+                    document.getElementById('order-cnpj').value = pedido.cnpj || '';
+                    document.getElementById('order-address').value = pedido.address || '';
+                    document.getElementById('order-neighborhood').value = pedido.neighborhood || '';
+                    document.getElementById('order-zipcode').value = pedido.zipcode || '';
+                    document.getElementById('order-city').value = pedido.city || '';
+                    document.getElementById('order-state').value = pedido.state || '';
+                    
+                    // Preencher dados da transportadora
+                    document.getElementById('carrier-name').value = pedido.carrier_name || '';
+                    document.getElementById('carrier-cnpj').value = pedido.carrier_cnpj || '';
+                    document.getElementById('carrier-phone').value = pedido.carrier_phone || '';
+                    document.getElementById('carrier-address').value = pedido.carrier_address || '';
+                    document.getElementById('carrier-neighborhood').value = pedido.carrier_neighborhood || '';
+                    document.getElementById('carrier-zipcode').value = pedido.carrier_zipcode || '';
+                    document.getElementById('carrier-city').value = pedido.carrier_city || '';
+                    document.getElementById('carrier-state').value = pedido.carrier_state || '';
+                    
+                    // Preencher configurações
+                    document.getElementById('order-type').value = pedido.order_type;
+                    document.getElementById('order-discount').value = pedido.discount_percent || 0;
+                    document.getElementById('order-status').value = pedido.status;
+                    document.getElementById('order-notes').value = pedido.notes || '';
+                    
+                    // Carregar itens
+                    this.orderItems = pedido.items || [];
+                    this.renderOrderItems();
+                } else {
+                    title.textContent = 'Novo Pedido';
+                    document.getElementById('order-form').reset();
+                    document.getElementById('order-status').value = 'pendente';
+                    this.orderItems = [];
+                    this.renderOrderItems();
+                }
+                
+                // Esconder seletor de cliente ao abrir modal
+                this.hideClientSelector();
+                
+                modal.classList.remove('hidden');
+            }
+
+
+            showClientSelector() {
+                const selector = document.getElementById('client-selector');
+                selector.classList.remove('hidden');
+                this.loadClientList();
+                
+                // Configurar busca em tempo real
+                const searchInput = document.getElementById('client-search');
+                searchInput.addEventListener('input', () => this.filterClientList());
+                searchInput.focus();
+            }
+
+
+            hideClientSelector() {
+                const selector = document.getElementById('client-selector');
+                selector.classList.add('hidden');
+                document.getElementById('client-search').value = '';
+            }
+
+
+            loadClientList() {
+                const clientList = document.getElementById('client-list');
+                
+                if (!this.clientes || this.clientes.length === 0) {
+                    clientList.innerHTML = '<p class="text-gray-500 text-center py-4">Nenhum cliente cadastrado</p>';
+                    return;
+                }
+
+
+                this.renderClientList(this.clientes);
+            }
+
+
+            filterClientList() {
+                const searchTerm = document.getElementById('client-search').value.toLowerCase();
+                
+                if (!searchTerm) {
+                    this.renderClientList(this.clientes);
+                    return;
+                }
+
+
+                const filteredClients = this.clientes.filter(cliente => 
+                    cliente.name.toLowerCase().includes(searchTerm) ||
+                    cliente.phone.includes(searchTerm) ||
+                    (cliente.document && cliente.document.includes(searchTerm)) ||
+                    (cliente.fantasy_name && cliente.fantasy_name.toLowerCase().includes(searchTerm))
+                );
+
+
+                this.renderClientList(filteredClients);
+            }
+
+
+            renderClientList(clients) {
+                const clientList = document.getElementById('client-list');
+                
+                if (clients.length === 0) {
+                    clientList.innerHTML = '<p class="text-gray-500 text-center py-4">Nenhum cliente encontrado</p>';
+                    return;
+                }
+
+
+                clientList.innerHTML = clients.map(cliente => `
+                    <div class="p-2 hover:bg-gray-100 rounded cursor-pointer border border-gray-200" onclick="selectClient(${cliente.id})">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-medium text-gray-900">${cliente.name}</div>
+                                <div class="text-sm text-gray-600">${cliente.phone}</div>
+                                ${cliente.fantasy_name ? `<div class="text-sm text-gray-500">${cliente.fantasy_name}</div>` : ''}
+                            </div>
+                            <div class="text-xs text-gray-400">
+                                ${cliente.city ? `${cliente.city}, ${cliente.state || ''}` : 'Sem localização'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+
+            selectClient(clientId) {
+                const cliente = this.clientes.find(c => c.id === clientId);
+                if (!cliente) return;
+
+
+                // Preencher dados do cliente no formulário
+                document.getElementById('order-customer-name').value = cliente.name;
+                document.getElementById('order-fantasy-name').value = cliente.fantasy_name || '';
+                document.getElementById('order-customer-phone').value = cliente.phone;
+                document.getElementById('order-customer-email').value = cliente.email || '';
+                document.getElementById('order-cnpj').value = cliente.document || '';
+                document.getElementById('order-address').value = cliente.address || '';
+                document.getElementById('order-neighborhood').value = cliente.neighborhood || '';
+                document.getElementById('order-zipcode').value = cliente.zipcode || '';
+                document.getElementById('order-city').value = cliente.city || '';
+                document.getElementById('order-state').value = cliente.state || '';
+
+
+                // Esconder seletor
+                this.hideClientSelector();
+                
+                // Mostrar feedback visual
+                const customerNameField = document.getElementById('order-customer-name');
+                customerNameField.style.backgroundColor = '#dcfce7';
+                setTimeout(() => {
+                    customerNameField.style.backgroundColor = '';
+                }, 1000);
+            }
+
+
+            clearClientData() {
+                // Limpar todos os campos do cliente
+                document.getElementById('order-customer-name').value = '';
+                document.getElementById('order-fantasy-name').value = '';
+                document.getElementById('order-customer-phone').value = '';
+                document.getElementById('order-customer-email').value = '';
+                document.getElementById('order-cnpj').value = '';
+                document.getElementById('order-address').value = '';
+                document.getElementById('order-neighborhood').value = '';
+                document.getElementById('order-zipcode').value = '';
+                document.getElementById('order-city').value = '';
+                document.getElementById('order-state').value = '';
+                
+                // Esconder seletor se estiver aberto
+                this.hideClientSelector();
+            }
+
+
+            closeOrderModal() {
+                document.getElementById('order-modal').classList.add('hidden');
+                this.currentEditingOrder = null;
+                this.orderItems = [];
+            }
+
+
+            addOrderItem() {
+                this.orderItems.push({
+                    product_id: '',
+                    product_name: '',
+                    quantity: 1,
+                    unit_price: 0
+                });
+                this.renderOrderItems();
+            }
+
+
+            removeOrderItem(index) {
+                this.orderItems.splice(index, 1);
+                this.renderOrderItems();
+            }
+
+
+            renderOrderItems() {
+                const container = document.getElementById('order-items-container');
+                
+                if (this.orderItems.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-4">Nenhum item adicionado. Clique em "Adicionar Item" para começar.</p>';
+                    this.calculateOrderTotal();
+                    return;
+                }
+
+
+                container.innerHTML = this.orderItems.map((item, index) => `
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Código do Produto</label>
+                                <input type="text" value="${item.product_code || ''}" 
+                                       onchange="updateOrderItemByCode(${index}, this.value)"
+                                       placeholder="Digite o código..."
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <div class="text-xs text-gray-500 mt-1">${item.product_name || 'Produto não identificado'}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Quantidade</label>
+                                <input type="number" min="1" value="${item.quantity}" 
+                                       onchange="updateOrderItem(${index}, 'quantity', this.value)"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Preço Unit.</label>
+                                <input type="number" min="0" step="0.01" value="${item.unit_price}" 
+                                       onchange="updateOrderItem(${index}, 'unit_price', this.value)"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Total</label>
+                                <input type="text" readonly value="R$ ${((item.quantity || 0) * (item.unit_price || 0)).toFixed(2)}" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600">
+                            </div>
+                            <div>
+                                <button type="button" onclick="removeOrderItem(${index})" 
+                                        class="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm">
+                                    Remover
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                this.calculateOrderTotal();
+            }
+
+
+            updateOrderItem(index, field, value) {
+                if (this.orderItems[index]) {
+                    this.orderItems[index][field] = value;
+                    this.renderOrderItems();
+                }
+            }
+
+
+            updateOrderItemByCode(index, code) {
+                if (!this.orderItems[index]) return;
+                
+                const produto = this.produtos.find(p => p.code === code || p.id.toString() === code);
+                if (produto) {
+                    this.orderItems[index].product_id = produto.id;
+                    this.orderItems[index].product_code = produto.code || produto.id;
+                    this.orderItems[index].product_name = produto.name;
+                    
+                    // Aplicar preço baseado no tipo de pedido
+                    const orderType = document.getElementById('order-type').value;
+                    let price = produto.unit_price || 0;
+                    if (orderType === 'caixa-fracionada') {
+                        price = price * 1.1; // Aumentar 10%
+                    }
+                    this.orderItems[index].unit_price = price;
+                } else {
+                    this.orderItems[index].product_code = code;
+                    this.orderItems[index].product_name = 'Produto não encontrado';
+                    this.orderItems[index].unit_price = 0;
+                }
+                
+                this.renderOrderItems();
+            }
+
+
+            updateOrderPricing() {
+                // Atualizar preços de todos os itens baseado no tipo de pedido
+                const orderType = document.getElementById('order-type').value;
+                
+                this.orderItems.forEach(item => {
+                    if (item.product_id) {
+                        const produto = this.produtos.find(p => p.id == item.product_id);
+                        if (produto) {
+                            let price = produto.unit_price || 0;
+                            if (orderType === 'caixa-fracionada') {
+                                price = price * 1.1; // Aumentar 10%
+                            }
+                            item.unit_price = price;
+                        }
+                    }
+                });
+                
+                this.renderOrderItems();
+            }
+
+
+            calculateOrderTotal() {
+                const subtotal = this.orderItems.reduce((total, item) => {
+                    return total + ((item.quantity || 0) * (item.unit_price || 0));
+                }, 0);
+                
+                const discount = parseFloat(document.getElementById('order-discount').value) || 0;
+                const discountAmount = subtotal * (discount / 100);
+                const total = subtotal - discountAmount;
+                
+                document.getElementById('order-subtotal').value = `R$ ${subtotal.toFixed(2)}`;
+                document.getElementById('order-total').value = `R$ ${total.toFixed(2)}`;
+            }
+
+
+            async saveOrder() {
+                const customerName = document.getElementById('order-customer-name').value;
+                const customerPhone = document.getElementById('order-customer-phone').value;
+                const orderType = document.getElementById('order-type').value;
+
+
+                if (!customerName || !customerPhone || this.orderItems.length === 0) {
+                    alert('Por favor, preencha os campos obrigatórios e adicione pelo menos um item.');
+                    return;
+                }
+
+
+                // Validar se todos os itens têm produtos válidos
+                const invalidItems = this.orderItems.filter(item => !item.product_name || item.product_name === 'Produto não encontrado');
+                if (invalidItems.length > 0) {
+                    alert('Alguns itens têm códigos de produtos inválidos. Verifique os códigos digitados.');
+                    return;
+                }
+
+
+                try {
+                    const orderData = {
+                        customer_name: customerName,
+                        fantasy_name: document.getElementById('order-fantasy-name').value || null,
+                        cnpj: document.getElementById('order-cnpj').value || null,
+                        customer_phone: customerPhone,
+                        customer_email: document.getElementById('order-customer-email').value || null,
+                        address: document.getElementById('order-address').value || null,
+                        neighborhood: document.getElementById('order-neighborhood').value || null,
+                        zipcode: document.getElementById('order-zipcode').value || null,
+                        city: document.getElementById('order-city').value || null,
+                        state: document.getElementById('order-state').value || null,
+                        carrier_cnpj: document.getElementById('carrier-cnpj').value || null,
+                        carrier_name: document.getElementById('carrier-name').value || null,
+                        carrier_phone: document.getElementById('carrier-phone').value || null,
+                        carrier_address: document.getElementById('carrier-address').value || null,
+                        carrier_neighborhood: document.getElementById('carrier-neighborhood').value || null,
+                        carrier_zipcode: document.getElementById('carrier-zipcode').value || null,
+                        carrier_city: document.getElementById('carrier-city').value || null,
+                        carrier_state: document.getElementById('carrier-state').value || null,
+                        order_type: orderType,
+                        discount_percent: parseFloat(document.getElementById('order-discount').value) || 0,
+                        status: document.getElementById('order-status').value,
+                        notes: document.getElementById('order-notes').value || null,
+                        items: this.orderItems,
+                        updated_at: new Date().toISOString()
+                    };
+
+
+                    console.log('💾 Salvando pedido:', orderData);
+
+
+                    let result;
+                    if (this.currentEditingOrder) {
+                        console.log('✏️ Atualizando pedido existente:', this.currentEditingOrder);
+                        result = await supabase
+                            .from('pedidos')
+                            .update(orderData)
+                            .eq('id', this.currentEditingOrder)
+                            .select();
+                    } else {
+                        console.log('➕ Criando novo pedido');
+                        result = await supabase
+                            .from('pedidos')
+                            .insert([orderData])
+                            .select();
+                    }
+
+
+                    if (result.error) {
+                        console.error('❌ Erro do Supabase:', result.error);
+                        throw result.error;
+                    }
+
+
+                    console.log('✅ Pedido salvo com sucesso:', result.data);
+
+
+                    // Recarregar todos os dados
+                    await this.loadAllData();
+                    
+                    // Atualizar todas as seções
+                    this.loadOrders();
+                    this.loadHistory();
+                    this.loadReports();
+                    this.updateStats();
+                    this.loadRecentActivities();
+                    
+                    this.closeOrderModal();
+                    
+                    const action = this.currentEditingOrder ? 'atualizado' : 'criado';
+                    alert(`Pedido ${action} com sucesso! Você pode visualizá-lo na seção de Pedidos e Histórico.`);
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao salvar pedido:', error);
+                    alert('Erro ao salvar pedido: ' + error.message);
+                }
+            }
+
+
+            async deleteOrder(orderId) {
+                if (!confirm('Tem certeza que deseja excluir este pedido?')) return;
+
+
+                try {
+                    const { error } = await supabase
+                        .from('pedidos')
+                        .delete()
+                        .eq('id', orderId);
+
+
+                    if (error) throw error;
+
+
+                    await this.loadAllData();
+                    this.loadOrders();
+                    this.loadReports();
+                    
+                    alert('Pedido excluído com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao excluir pedido:', error);
+                    alert('Erro ao excluir pedido: ' + error.message);
+                }
+            }
+
+
+            viewOrder(orderId) {
+                this.openOrderModal(orderId);
+            }
+
+
+            editOrder(orderId) {
+                this.openOrderModal(orderId);
+            }
+        }
+
+
+        // Funções globais
+        function showSection(sectionName) {
+            if (window.estoqueSystem && typeof window.estoqueSystem.showSection === 'function') {
+                window.estoqueSystem.showSection(sectionName);
+            }
+        }
+
+
+        function openProductModal() {
+            if (estoqueSystem) estoqueSystem.openProductModal();
+        }
+
+
+        function closeProductModal() {
+            if (estoqueSystem) estoqueSystem.closeProductModal();
+        }
+
+
+        function saveProduct() {
+            if (estoqueSystem) estoqueSystem.saveProduct();
+        }
+
+
+        // Funções para modal de cliente
+        function openClientModal(clientId = null) {
+            if (estoqueSystem) estoqueSystem.openClientModal(clientId);
+        }
+
+
+        function closeClientModal() {
+            if (estoqueSystem) estoqueSystem.closeClientModal();
+        }
+
+
+        function saveClient() {
+            if (estoqueSystem) estoqueSystem.saveClient();
+        }
+
+
+        // Funções para modal de pedido
+        function openOrderModal(orderId = null) {
+            if (estoqueSystem) estoqueSystem.openOrderModal(orderId);
+        }
+
+
+        function closeOrderModal() {
+            if (estoqueSystem) estoqueSystem.closeOrderModal();
+        }
+
+
+        function saveOrder() {
+            if (estoqueSystem) estoqueSystem.saveOrder();
+        }
+
+
+        function addOrderItem() {
+            if (estoqueSystem) estoqueSystem.addOrderItem();
+        }
+
+
+        function removeOrderItem(index) {
+            if (estoqueSystem) estoqueSystem.removeOrderItem(index);
+        }
+
+
+        function updateOrderItem(index, field, value) {
+            if (estoqueSystem) estoqueSystem.updateOrderItem(index, field, value);
+        }
+
+
+        function updateOrderItemByCode(index, code) {
+            if (estoqueSystem) estoqueSystem.updateOrderItemByCode(index, code);
+        }
+
+
+        function updateOrderPricing() {
+            if (estoqueSystem) estoqueSystem.updateOrderPricing();
+        }
+
+
+        function calculateOrderTotal() {
+            if (estoqueSystem) estoqueSystem.calculateOrderTotal();
+        }
+
+
+        // Funções de relatórios
+        function generateStockReport() {
+            if (!estoqueSystem || !estoqueSystem.produtos) {
+                alert('Dados não carregados');
+                return;
+            }
+
+
+            const produtos = estoqueSystem.produtos;
+            const ws = XLSX.utils.json_to_sheet(produtos.map(p => ({
+                'Código': p.code || p.id,
+                'Nome': p.name,
+                'Categoria': estoqueSystem.getCategoryName(p.category),
+                'Quantidade': p.quantity,
+                'Estoque Mínimo': p.min_stock,
+                'Localização': [p.street, p.row, p.area].filter(item => item).join('-') || 'Não definido',
+                'Valor Unitário': p.unit_price ? `R$ ${p.unit_price.toFixed(2)}` : 'R$ 0,00',
+                'Status': estoqueSystem.getProductStatus(p)
+            })));
+
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Estoque');
+            XLSX.writeFile(wb, `estoque_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+
+        function generateLowStockReport() {
+            if (!estoqueSystem || !estoqueSystem.produtos) {
+                alert('Dados não carregados');
+                return;
+            }
+
+
+            const lowStockProducts = estoqueSystem.produtos.filter(p => p.quantity <= p.min_stock);
+            
+            if (lowStockProducts.length === 0) {
+                alert('Não há produtos com estoque baixo!');
+                return;
+            }
+
+
+            const ws = XLSX.utils.json_to_sheet(lowStockProducts.map(p => ({
+                'Código': p.code || p.id,
+                'Nome': p.name,
+                'Categoria': estoqueSystem.getCategoryName(p.category),
+                'Quantidade Atual': p.quantity,
+                'Estoque Mínimo': p.min_stock,
+                'Diferença': p.min_stock - p.quantity,
+                'Status': estoqueSystem.getProductStatus(p)
+            })));
+
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Produtos em Baixa');
+            XLSX.writeFile(wb, `produtos_baixo_estoque_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+
+        function generateOrdersReport() {
+            if (!estoqueSystem || !estoqueSystem.pedidos) {
+                alert('Dados de pedidos não carregados');
+                return;
+            }
+
+
+            if (estoqueSystem.pedidos.length === 0) {
+                alert('Não há pedidos cadastrados!');
+                return;
+            }
+
+
+            const ws = XLSX.utils.json_to_sheet(estoqueSystem.pedidos.map(p => ({
+                'ID': p.id,
+                'Cliente': p.customer_name,
+                'Telefone': p.customer_phone,
+                'Tipo': p.order_type === 'caixa-fechada' ? 'Caixa Fechada' : 'Avulso',
+                'Status': estoqueSystem.getOrderStatusName(p.status),
+                'Data': new Date(p.created_at).toLocaleDateString('pt-BR'),
+                'Cidade': p.city || 'Não informado'
+            })));
+
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Pedidos');
+            XLSX.writeFile(wb, `pedidos_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+
+        function generateClientsReport() {
+            if (!estoqueSystem || !estoqueSystem.clientes) {
+                alert('Dados de clientes não carregados');
+                return;
+            }
+
+
+            if (estoqueSystem.clientes.length === 0) {
+                alert('Não há clientes cadastrados!');
+                return;
+            }
+
+
+            const ws = XLSX.utils.json_to_sheet(estoqueSystem.clientes.map(c => ({
+                'Nome': c.name,
+                'Nome Fantasia': c.fantasy_name || 'Pessoa Física',
+                'Telefone': c.phone,
+                'Email': c.email || 'Não informado',
+                'Documento': c.document || 'Não informado',
+                'Cidade': c.city || 'Não informado',
+                'Estado': c.state || 'Não informado',
+                'Data Cadastro': new Date(c.created_at).toLocaleDateString('pt-BR')
+            })));
+
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+            XLSX.writeFile(wb, `clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+
+        function generateMovementsReport() {
+            alert('Relatório de movimentações em desenvolvimento');
+        }
+
+
+        function generateFullBackup() {
+            if (!estoqueSystem) {
+                alert('Sistema não carregado');
+                return;
+            }
+
+
+            const wb = XLSX.utils.book_new();
+
+
+            // Produtos
+            if (estoqueSystem.produtos && estoqueSystem.produtos.length > 0) {
+                const produtosWs = XLSX.utils.json_to_sheet(estoqueSystem.produtos);
+                XLSX.utils.book_append_sheet(wb, produtosWs, 'Produtos');
+            }
+
+
+            // Pedidos
+            if (estoqueSystem.pedidos && estoqueSystem.pedidos.length > 0) {
+                const pedidosWs = XLSX.utils.json_to_sheet(estoqueSystem.pedidos);
+                XLSX.utils.book_append_sheet(wb, pedidosWs, 'Pedidos');
+            }
+
+
+            // Clientes
+            if (estoqueSystem.clientes && estoqueSystem.clientes.length > 0) {
+                const clientesWs = XLSX.utils.json_to_sheet(estoqueSystem.clientes);
+                XLSX.utils.book_append_sheet(wb, clientesWs, 'Clientes');
+            }
+
+
+            XLSX.writeFile(wb, `backup_completo_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+
+        // Funções para histórico
+        function applyHistoryFilters() {
+            if (estoqueSystem) estoqueSystem.applyHistoryFilters();
+        }
+
+
+        function clearHistoryFilters() {
+            if (estoqueSystem) estoqueSystem.clearHistoryFilters();
+        }
+
+
+        function closeOrderDetailsModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+
+        // Funções para seletor de cliente
+        function showClientSelector() {
+            if (estoqueSystem) estoqueSystem.showClientSelector();
+        }
+
+
+        function hideClientSelector() {
+            if (estoqueSystem) estoqueSystem.hideClientSelector();
+        }
+
+
+        function selectClient(clientId) {
+            if (estoqueSystem) estoqueSystem.selectClient(clientId);
+        }
+
+
+        function clearClientData() {
+            if (estoqueSystem) estoqueSystem.clearClientData();
+        }
+
+
+        // Inicialização
+        let estoqueSystem;
+
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Iniciando aplicação...');
+            estoqueSystem = new EstoqueSystem();
+            window.estoqueSystem = estoqueSystem;
+        });
+    </script>
+</body>
+</html>
